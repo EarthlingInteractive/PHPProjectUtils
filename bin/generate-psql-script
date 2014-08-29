@@ -1,0 +1,70 @@
+#!/usr/bin/env php
+<?php
+
+$self = $argv[0];
+$about =
+	"$self: Generates a script to invoke the PostgreSQL client\n".
+	"given a JSON configuration file of Doctrine options.";
+$usage =
+	"Usage: $self [options] <config-file>\n".
+	"\n".
+	"Options:\n".
+	"  -psql-exe <command> ; command name or path to client executable, e.g. pg_dump";
+
+$dbcConfigFile = null;
+$psqlExe = 'psql';
+$usageErrors = array();
+
+for( $i=1; $i<count($argv); ++$i ) {
+	if( $argv[$i] == '' ) {
+		$usageErrors[] = "Unrecognized argument (empty string)";
+	} else if( $argv[$i] == '-psql-exe' ) {
+		$psqlExe = $argv[++$i];
+	} else if( preg_match('/^--?(h|\?|help)$/', $argv[$i]) ) {
+		echo "$about\n\n$usage\n";
+		exit(0);
+	} else if( $argv[$i] == '-' ) {
+		$dbcConfigFile = 'php://stdin';
+	} else if( $argv[$i][0] != '-' ) {
+		$dbcConfigFile = $argv[$i];
+	} else {
+		$usageErrors[] = "Unrecognized argument: '{$argv[$i]}'";
+	}
+}
+if( $dbcConfigFile === null ) {
+	$usageErrors[] = "No config file specified.";
+}
+if( $usageErrors ) {
+	foreach( $usageErrors as $err ) {
+		fwrite(STDERR, "$self: error: $err\n");
+	}
+	fwrite(STDERR, "\n$usage\n");
+	exit(1);
+}
+
+$dbcJson = file_get_contents($dbcConfigFile);
+if( $dbcJson === false ) {
+	fwrite(STDERR, "Error: Failed to open DBC config {$dbcConfigFile}: $errorText\n");
+	exit(1);
+}
+$dbcConfig = json_decode($dbcJson, true);
+if( $dbcConfig === null ) {
+	fwrite(STDERR, "Error parsing config JSON.");
+	exit(1);
+}
+
+function coalesce( &$thing, $default ) {
+	return isset($thing) ? $thing : $default;
+}
+
+$sePsqlExe  = escapeshellarg($psqlExe);
+$sePassword = escapeshellarg($dbcConfig['password']);
+$seHost     = escapeshellarg($dbcConfig['host']);
+$sePort     = escapeshellarg(coalesce($dbcConfig['port'], 5432));
+$seDatabase = escapeshellarg($dbcConfig['dbname']);
+$seUser     = escapeshellarg($dbcConfig['user']);
+
+echo "#!/bin/sh\n";
+echo "\n";
+echo "export PGPASSWORD={$sePassword}\n";
+echo "exec $psqlExe $seDatabase -U $seUser -h $seHost -p $sePort \"\$@\"\n";

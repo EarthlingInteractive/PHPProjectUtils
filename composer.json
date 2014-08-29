@@ -1,0 +1,14 @@
+{
+	"name": "earthit/php-project-utils",
+	"description": "Build utilities for PHP projects, in PHP.",
+	"license": "MIT",
+	"require": { },
+	"bin": [
+		"bin/generate-psql-script"
+	],
+	"autoload": {
+		"psr-0": {
+			"EarthIT_ProjectUtil_": "lib/"
+		}
+	}
+}
