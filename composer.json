@@ -4,7 +4,8 @@
 	"license": "MIT",
 	"require": { },
 	"bin": [
-		"bin/generate-psql-script"
+		"bin/generate-psql-script",
+		"bin/upgrade-database"
 	],
 	"autoload": {
 		"psr-0": {
