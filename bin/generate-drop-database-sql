@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+$self = $argv[0];
+$about =
+	"$self: Generates an SQL script to create a database and user\n".
+	"given a JSON configuration file of Doctrine options.";
+$usage =
+	"Usage: $self <config-file>";
+
+if( count($argv) < 2 ) {
+	fwrite(STDERR, "Error: No config file specified.\n\n$usage\n");
+	exit(1);
+}
+$dbcConfigFile = $argv[1];
+$dbcJson = file_get_contents($dbcConfigFile);
+if( $dbcJson === false ) {
+	fwrite(STDERR, "Error: Failed to open DBC config {$dbcConfigFile}: $errorText\n");
+	exit(1);
+}
+$dbcConfig = json_decode($dbcJson, true);
+if( $dbcConfig === null ) {
+	fwrite(STDERR, "Error parsing config JSON.");
+	exit(1);
+}
+
+echo "DROP DATABASE \"{$dbcConfig['dbname']}\";\n";
+echo "DROP USER \"{$dbcConfig['user']}\";\n";
