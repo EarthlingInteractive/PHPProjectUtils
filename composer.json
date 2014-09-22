@@ -5,7 +5,9 @@
 	"require": { },
 	"bin": [
 		"bin/generate-psql-script",
-		"bin/upgrade-database"
+		"bin/upgrade-database",
+		"bin/generate-create-database-sql",
+		"bin/generate-drop-database-sql"
 	],
 	"autoload": {
 		"psr-0": {
