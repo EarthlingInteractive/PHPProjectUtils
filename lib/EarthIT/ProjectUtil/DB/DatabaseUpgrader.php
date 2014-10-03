@@ -102,6 +102,23 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		foreach( $upgradeScriptsToRun as $us ) {
 			$usFile = "{$this->upgradeScriptDir}/$us";
 			$sql = file_get_contents($usFile);
+			
+			$useTransaction = true;
+			
+			$firstFewLines = explode("\n", $sql, 100);
+			foreach( $firstFewLines as $l ) {
+				if( preg_match('/^--\s*Dear database upgrader:\s*(.*)$/', $l, $bif) ) {
+					$directive = trim($bif[1]);
+					switch( $directive ) {
+					case "Please do not wrap this script in a transaction.":
+						$useTransaction = false;
+						break;
+					default:
+						throw new Exception("Unrecognized upgrader directive in '$usFile': \"$directive\"");
+					}
+				}
+			}
+
 			$hash = sha1($sql);
 			if( $this->verbosity >=self::VERBOSITY_LIST_SCRIPTS ) {
 				fwrite(STDERR, "Running $usFile (SHA1 = $hash)...\n");
@@ -112,18 +129,18 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			// Need to use exec specifically (rather than query or fetchAll)
 			// to avoid attempting to 'prepare' the statement, as PDO does not allow
 			// multiple commands in one prepared statement.
-			$this->DBA->exec('BEGIN');
+			if( $useTransaction ) $this->DBA->exec('BEGIN');
 			try {
 				$this->DBA->exec($sql);
 				$this->DBA->fetchAll(
 					"INSERT INTO {$this->upgradeTableExpression} (time, scriptfilename, scriptfilehash) VALUES (NOW(), :scriptfilename, :scriptfilehash)",
 					array('scriptfilename'=>$us, 'scriptfilehash'=>$hash)
 				);
-				$this->DBA->exec('COMMIT');
+				if( $useTransaction ) $this->DBA->exec('COMMIT');
 			} catch( Exception $e ) {
-				$this->DBA->exec('ROLLBACK');
-				fputs(STDERR, "Error while running $usFile : ".$e->getMessage()."\n");
-				throw new Exception("Error while running $usFile", 0, $e);
+				if( $useTransaction ) $this->DBA->exec('ROLLBACK');
+				fputs(STDERR, "Error while running '$usFile' : ".$e->getMessage()."\n");
+				throw new Exception("Error while running '$usFile'", 0, $e);
 			}
 		}
 		
