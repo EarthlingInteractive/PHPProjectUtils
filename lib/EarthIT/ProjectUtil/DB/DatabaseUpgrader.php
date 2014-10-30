@@ -129,6 +129,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			// Need to use exec specifically (rather than query or fetchAll)
 			// to avoid attempting to 'prepare' the statement, as PDO does not allow
 			// multiple commands in one prepared statement.
+			// TODO: Ensure that two upgrade scripts running in parallel don't accidentally
+			// run scripts twice.
 			if( $useTransaction ) $this->DBA->exec('BEGIN');
 			try {
 				$this->DBA->exec($sql);
