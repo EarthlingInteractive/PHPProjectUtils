@@ -31,16 +31,29 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->upgradeTableExpression = $t;
 	}
 	
-	public function run() {
-		$upgradesAlreadyRun = array();
-		if( count($this->DBA->fetchAll(
+	protected function upgradeTableExists() {
+		return count($this->DBA->fetchAll(
 			"SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
 			array($this->upgradeTableSchemaName ?: 'public', $this->upgradeTableName)
-		)) > 0 ) {
-			foreach($this->DBA->fetchAll("SELECT * FROM {$this->upgradeTableExpression}") as $sar) {
-				$upgradesAlreadyRun[$sar['scriptfilename']] = $sar;
-			}
+		)) > 0;
+	}
+	
+	protected function readUpgradesTable() {
+		$upgradesAlreadyRun = array();
+		foreach($this->DBA->fetchAll("SELECT * FROM {$this->upgradeTableExpression}") as $sar) {
+			$upgradesAlreadyRun[$sar['scriptfilename']] = $sar;
 		}
+		return $upgradesAlreadyRun;
+	}
+	
+	protected function getUpgradesAlreadyRun() {
+		return $this->upgradeTableExists() ?
+			$this->readUpgradesTable() :
+			array();
+	}
+	
+	public function run() {
+		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun();
 		
 		$upgradeScripts = array();
 		$dh = opendir($this->upgradeScriptDir);
