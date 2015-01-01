@@ -52,6 +52,33 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			array();
 	}
 	
+	/**
+	 * @param string $sql upgrade script SQL (no placeholders or parameters) to be run
+	 * @param string $us upgrade script filename
+	 * @param string $hash hex-encoded SHA-1 of SQL
+	 * @param boolean $useTransaction whether or not the upgrade should be wrapped in a transaction
+	 */
+	protected function doUpgrade($sql, $us, $hash, $useTransaction) {
+		// Need to use exec specifically (rather than query or fetchAll)
+		// to avoid attempting to 'prepare' the statement, as PDO does not allow
+		// multiple commands in one prepared statement.
+		// TODO: Ensure that two upgrade scripts running in parallel don't accidentally
+		// run scripts twice.
+		if( $useTransaction ) $this->DBA->exec('BEGIN');
+		try {
+			$this->DBA->exec($sql);
+			$this->DBA->fetchAll(
+				"INSERT INTO {$this->upgradeTableExpression} (time, scriptfilename, scriptfilehash) VALUES (NOW(), :scriptfilename, :scriptfilehash)",
+				array('scriptfilename'=>$us, 'scriptfilehash'=>$hash)
+			);
+			if( $useTransaction ) $this->DBA->exec('COMMIT');
+		} catch( Exception $e ) {
+			if( $useTransaction ) $this->DBA->exec('ROLLBACK');
+			fputs(STDERR, "Error while running '$usFile' : ".$e->getMessage()."\n");
+			throw new Exception("Error while running '$usFile'", 0, $e);
+		}
+	}
+	
 	public function run() {
 		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun();
 		
@@ -139,24 +166,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			if( $this->verbosity >=self::VERBOSITY_DUMP_SCRIPTS ) {
 				fwrite(STDERR, "\n  ".str_replace("\n","\n  ",rtrim($sql))."\n\n");
 			}
-			// Need to use exec specifically (rather than query or fetchAll)
-			// to avoid attempting to 'prepare' the statement, as PDO does not allow
-			// multiple commands in one prepared statement.
-			// TODO: Ensure that two upgrade scripts running in parallel don't accidentally
-			// run scripts twice.
-			if( $useTransaction ) $this->DBA->exec('BEGIN');
-			try {
-				$this->DBA->exec($sql);
-				$this->DBA->fetchAll(
-					"INSERT INTO {$this->upgradeTableExpression} (time, scriptfilename, scriptfilehash) VALUES (NOW(), :scriptfilename, :scriptfilehash)",
-					array('scriptfilename'=>$us, 'scriptfilehash'=>$hash)
-				);
-				if( $useTransaction ) $this->DBA->exec('COMMIT');
-			} catch( Exception $e ) {
-				if( $useTransaction ) $this->DBA->exec('ROLLBACK');
-				fputs(STDERR, "Error while running '$usFile' : ".$e->getMessage()."\n");
-				throw new Exception("Error while running '$usFile'", 0, $e);
-			}
+			
+			$this->doUpgrade($sql, $us, $hash, $useTransaction);
 		}
 		
 		if( $this->verbosity >= self::VERBOSITY_LIST_SCRIPTS ) {
