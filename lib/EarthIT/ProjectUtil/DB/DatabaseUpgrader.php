@@ -5,16 +5,19 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	const VERBOSITY_LIST_SCRIPTS = 1;
 	const VERBOSITY_DUMP_SCRIPTS = 2;
 	
-	protected $DNC;
+	protected $sqlRunner;
 	protected $upgradeScriptDir;
-	public $allowOutOfOrderScripts;
 	protected $upgradeTableSchemaName;
 	protected $upgradeTableName;
 	protected $upgradeTableExpression;
-	public $verbosity = 0;
+	protected $shouldDoQueries; // Set to false while dry-running upgrades
 	
-	public function __construct( $DBA, $upgradeScriptDir ) {
-		$this->DBA = $DBA;
+	public $allowOutOfOrderScripts;
+	public $verbosity = 0;
+	public $actuallyDoUpgrades = true;
+	
+	public function __construct( $sqlRunner, $upgradeScriptDir ) {
+		$this->sqlRunner = $sqlRunner;
 		$this->upgradeScriptDir = $upgradeScriptDir;
 		$this->setUpgradeTable('schemaupgrade');
 	}
@@ -31,16 +34,38 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->upgradeTableExpression = $t;
 	}
 	
+	protected function doRawQuery( $sql ) {
+		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
+			echo "-- doRawQuery\n", $sql, "\n";
+		}
+		if( $this->shouldDoQueries ) $this->sqlRunner->doRawQuery($sql);
+	}
+	
+	protected function fetchRows( $sql, array $params=array() ) {
+		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
+			echo "-- fetchRows with params: ", json_encode($params), "\n", $sql, "\n";
+		}
+		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : [];
+	}
+	
+	protected function maybeDoRawQuery($sql) {
+		if( $this->queryMode == 'real' ) {
+			$this->doRawQuery($sql);
+		} else {
+			echo $sql, "\n";
+		}
+	}
+	
 	protected function upgradeTableExists() {
-		return count($this->DBA->fetchAll(
-			"SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
-			array($this->upgradeTableSchemaName ?: 'public', $this->upgradeTableName)
+		return count($this->fetchRows(
+			"SELECT * FROM information_schema.tables WHERE table_schema = {tableschema} AND table_name = {tablename}",
+			array('tableschema'=>$this->upgradeTableSchemaName ?: 'public', 'tablename'=>$this->upgradeTableName)
 		)) > 0;
 	}
 	
 	protected function readUpgradesTable() {
 		$upgradesAlreadyRun = array();
-		foreach($this->DBA->fetchAll("SELECT * FROM {$this->upgradeTableExpression}") as $sar) {
+		foreach($this->fetchRows("SELECT scriptfilename AS scriptfilename FROM {$this->upgradeTableExpression}") as $sar) {
 			$upgradesAlreadyRun[$sar['scriptfilename']] = $sar;
 		}
 		return $upgradesAlreadyRun;
@@ -50,6 +75,16 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		return $this->upgradeTableExists() ?
 			$this->readUpgradesTable() :
 			array();
+	}
+	
+	protected function beginTransaction() {
+		$this->doRawQuery('BEGIN');
+	}
+	protected function commitTransaction() {
+		$this->doRawQuery('COMMIT');
+	}
+	protected function cancelTransaction() {
+		$this->doRawQuery('ROLLBACK');
 	}
 	
 	/**
@@ -64,22 +99,26 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		// multiple commands in one prepared statement.
 		// TODO: Ensure that two upgrade scripts running in parallel don't accidentally
 		// run scripts twice.
-		if( $useTransaction ) $this->DBA->exec('BEGIN');
+		if( $useTransaction ) $this->beginTransaction();
 		try {
-			$this->DBA->exec($sql);
-			$this->DBA->fetchAll(
-				"INSERT INTO {$this->upgradeTableExpression} (time, scriptfilename, scriptfilehash) VALUES (NOW(), :scriptfilename, :scriptfilehash)",
+			$this->doRawQuery($sql);
+			$this->fetchRows(
+				"INSERT INTO {$this->upgradeTableExpression}\n".
+				"(time, scriptfilename, scriptfilehash) VALUES\n".
+				"(NOW(), {scriptfilename}, {scriptfilehash})",
 				array('scriptfilename'=>$us, 'scriptfilehash'=>$hash)
 			);
-			if( $useTransaction ) $this->DBA->exec('COMMIT');
+			if( $useTransaction ) $this->commitTransaction();
 		} catch( Exception $e ) {
-			if( $useTransaction ) $this->DBA->exec('ROLLBACK');
+			if( $useTransaction ) $this->cancelTransaction();
 			fputs(STDERR, "Error while running '$usFile' : ".$e->getMessage()."\n");
 			throw new Exception("Error while running '$usFile'", 0, $e);
 		}
 	}
 	
 	public function run() {
+		$this->shouldDoQueries = true;
+		
 		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun();
 		
 		$upgradeScripts = array();
@@ -130,14 +169,16 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 		
 		if( $this->verbosity >=self::VERBOSITY_LIST_SCRIPTS ) {
-			fwrite(STDERR, count($upgradeScriptsToRun)." scripts to be run:\n");
+			fwrite(STDOUT, "-- ".count($upgradeScriptsToRun)." scripts to be run:\n");
 			if( $upgradeScriptsToRun ) {
-				fwrite(STDERR,
-					"From ".$upgradeScriptsToRun[0]." to ".
+				fwrite(STDOUT,
+					"-- From ".$upgradeScriptsToRun[0]." to ".
 					$upgradeScriptsToRun[count($upgradeScriptsToRun)-1]."\n"
 				);
 			}
 		}
+		
+		$this->shouldDoQueries = $this->actuallyDoUpgrades;
 		
 		foreach( $upgradeScriptsToRun as $us ) {
 			$usFile = "{$this->upgradeScriptDir}/$us";
@@ -161,17 +202,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 
 			$hash = sha1($sql);
 			if( $this->verbosity >=self::VERBOSITY_LIST_SCRIPTS ) {
-				fwrite(STDERR, "Running $usFile (SHA1 = $hash)...\n");
-			}
-			if( $this->verbosity >=self::VERBOSITY_DUMP_SCRIPTS ) {
-				fwrite(STDERR, "\n  ".str_replace("\n","\n  ",rtrim($sql))."\n\n");
+				fwrite(STDOUT, "-- Running $usFile (SHA1 = $hash)...\n");
 			}
 			
 			$this->doUpgrade($sql, $us, $hash, $useTransaction);
 		}
 		
 		if( $this->verbosity >= self::VERBOSITY_LIST_SCRIPTS ) {
-			fwrite(STDERR, "Upgrade completed successfully!\n");
+			fwrite(STDOUT, "Upgrade completed successfully!\n");
 		}
 	}
 }

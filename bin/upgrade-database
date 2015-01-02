@@ -5,9 +5,24 @@ $forceUpgrade = false;
 $verbosity = 0;
 $upgradeTableExpression = null;
 $scriptDir = 'build/db/upgrades';
+$upgraderClass = 'EarthIT_ProjectUtil_DB_DatabaseUpgrader';
 $bootstrapFile = null;
+$showHelp = false;
+$dryRun = false;
 
-for( $i=1; $i<$argc; ++$i ) {
+$usageText =
+	"Usage: {$argv[0]} [options]\n".
+	"Options:\n".
+	"  -f    ; force upgrade, even if scripts will be run out of order\n".
+	"  -upgrade-table [<schema>.]<table-name> ; indicate upgrade log table\n".
+	"  -bootstrap <file.php>      ; indicate environment initialization script\n".
+	"  -upgrade-script-dir <dir>  ; indicate directory containing upgrade scripts\n".
+	"  -upgrade-class <classname> ; override upgrader class\n".
+	"  -v    ; be chatty\n".
+	"  -vv   ; be chattier\n".
+	"  -? -h ; show help text and exit\n";
+
+for( $i=1; $i<count($argv); ++$i ) {
 	if( '-f' == $argv[$i] ) {
 		$forceUpgrade = true;
 	} else if( '-upgrade-table' == $argv[$i] ) {
@@ -16,14 +31,26 @@ for( $i=1; $i<$argc; ++$i ) {
 		$bootstrapFile = $argv[++$i];
 	} else if( '-upgrade-script-dir' == $argv[$i] ) {
 		$scriptDir = $argv[++$i];
+	} else if( '-upgrader-class' == $argv[$i] ) {
+		$upgraderClass = $argv[++$i];
+	} else if( '-dry-run' == $argv[$i] ) {
+		$dryRun = true;
 	} else if( '-v' == $argv[$i] ) {
 		$verbosity = 1;
 	} else if( '-vv' == $argv[$i] ) {
 		$verbosity = 2;
+	} else if( '-?' == $argv[$i] or '-h' == $argv[$i] or '--help' == $argv[$i] ) {
+		$showHelp = true;
 	} else {
 		fwrite(STDERR, "Error: Unrecognized argument: {$argv[$i]}\n");
+		fwrite(STDERR, "Run {$argv[0]} -? for usage information\n");
 		exit(1);
 	}
+}
+
+if( $showHelp ) {
+	fwrite(STDOUT, $usageText);
+	exit(0);
 }
 
 function findBootstrapFile() {
@@ -43,9 +70,17 @@ if( $bootstrapFile === null ) {
 }
 
 $reg = require $bootstrapFile;
-$DBA = $reg->getDbAdapter();
+if( method_exists($reg, 'getSqlRunner') ) {
+	$sqlRunner = $reg->getSqlRunner();
+} else if( method_exists($reg, 'getDbAdapter') ) {
+	$sqlRunner = new EarthIT_ProjectUtil_DB_DoctrineSQLRunner($reg->getDbAdapter());
+} else {
+	fwrite(STDERR, "Error: Registry doesn't define getSqlRunner or getDbAdapter.\n");
+	exit(1);
+}
 
-$upgrader = new EarthIT_ProjectUtil_DB_DatabaseUpgrader($DBA, $scriptDir);
+$upgrader = new $upgraderClass($sqlRunner, $scriptDir);
+$upgrader->actuallyDoUpgrades = !$dryRun;
 $upgrader->allowOutOfOrderScripts = $forceUpgrade;
 $upgrader->verbosity = $verbosity;
 if( $upgradeTableExpression ) $upgrader->setUpgradeTable($upgradeTableExpression);
