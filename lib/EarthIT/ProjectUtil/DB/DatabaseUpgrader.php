@@ -111,8 +111,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			if( $useTransaction ) $this->commitTransaction();
 		} catch( Exception $e ) {
 			if( $useTransaction ) $this->cancelTransaction();
-			fputs(STDERR, "Error while running '$usFile' : ".$e->getMessage()."\n");
-			throw new Exception("Error while running '$usFile'", 0, $e);
+			fputs(STDERR, "Error while running '$us' : ".$e->getMessage()."\n");
+			throw new Exception("Error while running '$us'", 0, $e);
 		}
 	}
 	
