@@ -41,21 +41,20 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		if( $this->shouldDoQueries ) $this->sqlRunner->doRawQuery($sql);
 	}
 	
+	protected function doQuery( $sql, array $params=array() ) {
+		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
+			echo "-- doQuery with params: ", json_encode($params), "\n", $sql, "\n";
+		}
+		if( $this->shouldDoQueries ) $this->sqlRunner->doQuery($sql,$params);
+	}
+	
 	protected function fetchRows( $sql, array $params=array() ) {
 		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
 			echo "-- fetchRows with params: ", json_encode($params), "\n", $sql, "\n";
 		}
 		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : [];
 	}
-	
-	protected function maybeDoRawQuery($sql) {
-		if( $this->queryMode == 'real' ) {
-			$this->doRawQuery($sql);
-		} else {
-			echo $sql, "\n";
-		}
-	}
-	
+		
 	protected function upgradeTableExists() {
 		return count($this->fetchRows(
 			"SELECT * FROM information_schema.tables WHERE table_schema = {tableschema} AND table_name = {tablename}",
@@ -102,7 +101,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		if( $useTransaction ) $this->beginTransaction();
 		try {
 			$this->doRawQuery($sql);
-			$this->fetchRows(
+			$this->doQuery(
 				"INSERT INTO {$this->upgradeTableExpression}\n".
 				"(time, scriptfilename, scriptfilehash) VALUES\n".
 				"(NOW(), {scriptfilename}, {scriptfilehash})",

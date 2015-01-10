@@ -14,7 +14,7 @@ class EarthIT_ProjectUtil_DB_DoctrineSQLRunner
 		$this->conn->exec($sql);
 	}
 	
-	public function fetchRows( $sql, array $params=array() ) {
+	protected function rewriteForDoctrine( &$sql, array &$params ) {
 		$rewrittenParams = array();
 		
 		$rewrittenSql = preg_replace('/\{([^\}]+)\}/', '?', $sql);
@@ -24,6 +24,17 @@ class EarthIT_ProjectUtil_DB_DoctrineSQLRunner
 			$rewrittenParams[] = $params[$bif[1]];
 		}
 		
-		return $this->conn->fetchAll($rewrittenSql, $rewrittenParams);
+		$sql = $rewrittenSql;
+		$params = $rewrittenParams;
+	}
+	
+	public function doQuery( $sql, array $params=array() ) {
+		$this->rewriteForDoctrine($sql, $params);
+		return $this->conn->fetchAll($sql, $params);
+	}
+	
+	public function fetchRows( $sql, array $params=array() ) {
+		$this->rewriteForDoctrine($sql, $params);
+		return $this->conn->fetchAll($sql, $params);
 	}
 }

@@ -14,7 +14,7 @@ class EarthIT_ProjectUtil_DB_PDOSQLRunner
 		$this->conn->exec($sql);
 	}
 	
-	public function fetchRows( $sql, array $params=array() ) {
+	protected function rewriteForPdo( &$sql, array &$params ) {
 		$rewrittenParams = array();
 		
 		$rewrittenSql = preg_replace('/\{([^\}]+)\}/', '?', $sql);
@@ -24,8 +24,20 @@ class EarthIT_ProjectUtil_DB_PDOSQLRunner
 			$rewrittenParams[] = $params[$bif[1]];
 		}
 		
-		$stmt = $this->conn->prepare($rewrittenSql);
-		$stmt->execute($rewrittenParams);
+		$sql = $rewrittenSql;
+		$params = $rewrittenParams;
+	}
+	
+	public function fetchRows( $sql, array $params=array() ) {
+		$this->rewriteForPdo($sql, $params);
+		$stmt = $this->conn->prepare($sql);
+		$stmt->execute($params);
 		return $stmt->fetchAll();
+	}
+	
+	public function doQuery( $sql, array $params=array() ) {
+		$this->rewriteForPdo($sql, $params);
+		$stmt = $this->conn->prepare($sql);
+		$stmt->execute($params);
 	}
 }
