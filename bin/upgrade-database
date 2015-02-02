@@ -70,7 +70,10 @@ if( $bootstrapFile === null ) {
 }
 
 $reg = require $bootstrapFile;
-if( method_exists($reg, 'getSqlRunner') ) {
+if( isset($reg->sqlRunner) ) {
+	// the most modernistical approach
+	$sqlRunner = $reg->sqlRunner;
+} else if( method_exists($reg, 'getSqlRunner') ) {
 	$sqlRunner = $reg->getSqlRunner();
 } else if( method_exists($reg, 'getDbAdapter') ) {
 	$sqlRunner = new EarthIT_ProjectUtil_DB_DoctrineSQLRunner($reg->getDbAdapter());
