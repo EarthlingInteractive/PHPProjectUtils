@@ -86,13 +86,18 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->doRawQuery('ROLLBACK');
 	}
 	
+	protected function runPhpScript($text, $name) {
+		require "{$this->upgradeScriptDir}/{$name}";
+		// eval("? >".$text."< ? php");
+	}
+	
 	/**
 	 * @param string $sql upgrade script SQL (no placeholders or parameters) to be run
 	 * @param string $us upgrade script filename
 	 * @param string $hash hex-encoded SHA-1 of SQL
 	 * @param boolean $useTransaction whether or not the upgrade should be wrapped in a transaction
 	 */
-	protected function doUpgrade($sql, $us, $hash, $useTransaction) {
+	protected function doUpgrade($usText, $usName, $hash, $useTransaction) {
 		// Need to use exec specifically (rather than query or fetchAll)
 		// to avoid attempting to 'prepare' the statement, as PDO does not allow
 		// multiple commands in one prepared statement.
@@ -100,18 +105,26 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		// run scripts twice.
 		if( $useTransaction ) $this->beginTransaction();
 		try {
-			$this->doRawQuery($sql);
+			if( preg_match('/\.(php|sql)$/',$usName,$bif) ) {
+				switch( $ext = $bif[1] ) {
+				case 'sql': $this->doRawQuery($usText); break;
+				case 'php': $this->runPhpScript($usText, $usName); break;
+				default: throw new Exception("'$ext'?", "{$this->upgradeScriptDir}/{$usName}");
+				}
+			} else {
+				throw new Exception("Can't glean upgrade script type from name: '$usName'");
+			}
 			$this->doQuery(
 				"INSERT INTO {$this->upgradeTableExpression}\n".
 				"(time, scriptfilename, scriptfilehash) VALUES\n".
 				"(NOW(), {scriptfilename}, {scriptfilehash})",
-				array('scriptfilename'=>$us, 'scriptfilehash'=>$hash)
+				array('scriptfilename'=>$usName, 'scriptfilehash'=>$hash)
 			);
 			if( $useTransaction ) $this->commitTransaction();
 		} catch( Exception $e ) {
 			if( $useTransaction ) $this->cancelTransaction();
-			fputs(STDERR, "Error while running '$us' : ".$e->getMessage()."\n");
-			throw new Exception("Error while running '$us'", 0, $e);
+			fputs(STDERR, "Error while running '$usName' : ".$e->getMessage()."\n");
+			throw new Exception("Error while running '$usName'", 0, $e);
 		}
 	}
 	
@@ -128,7 +141,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$junkFiles = array();
 		while( ($fn = readdir($dh)) !== false ) {
 			if( preg_match('/^\./',$fn) ) continue;
-			if( !preg_match('/\.sql$/',$fn) ) {
+			if( !preg_match('/\.(?:sql|php)$/',$fn) ) {
 				$junkFiles[] = $fn;
 				continue;
 			}
@@ -181,13 +194,13 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		
 		foreach( $upgradeScriptsToRun as $us ) {
 			$usFile = "{$this->upgradeScriptDir}/$us";
-			$sql = file_get_contents($usFile);
+			$usText = file_get_contents($usFile);
 			
 			$useTransaction = true;
 			
-			$firstFewLines = explode("\n", $sql, 100);
+			$firstFewLines = explode("\n", $usText, 100);
 			foreach( $firstFewLines as $l ) {
-				if( preg_match('/^--\s*Dear database upgrader:\s*(.*)$/', $l, $bif) ) {
+				if( preg_match('/^(?:--|#)\s*Dear database upgrader:\s*(.*)$/', $l, $bif) ) {
 					$directive = trim($bif[1]);
 					switch( $directive ) {
 					case "Please do not wrap this script in a transaction.":
@@ -199,12 +212,12 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 				}
 			}
 
-			$hash = sha1($sql);
+			$hash = sha1($usText);
 			if( $this->verbosity >=self::VERBOSITY_LIST_SCRIPTS ) {
 				fwrite(STDOUT, "-- Running $usFile (SHA1 = $hash)...\n");
 			}
 			
-			$this->doUpgrade($sql, $us, $hash, $useTransaction);
+			$this->doUpgrade($usText, $us, $hash, $useTransaction);
 		}
 		
 		if( $this->verbosity >= self::VERBOSITY_LIST_SCRIPTS ) {
