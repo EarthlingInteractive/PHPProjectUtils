@@ -67,12 +67,17 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : [];
 	}
+	
+	protected function fetchValue( $sql, $params=[] ) {
+		foreach( $this->fetchRows($sql,$params) as $row ) foreach( $row as $v ) return $v;
+		return null;
+	}
 		
 	protected function upgradeTableExists() {
-		return count($this->fetchRows(
-			"SELECT * FROM information_schema.tables WHERE table_schema = {tableschema} AND table_name = {tablename}",
+		return $this->fetchValue(
+			"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = {tableschema} AND table_name = {tablename}",
 			array('tableschema'=>$this->upgradeTableSchemaName ?: 'public', 'tablename'=>$this->upgradeTableName)
-		)) > 0;
+		) > 0;
 	}
 	
 	protected function readUpgradesTable() {
@@ -99,12 +104,12 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	
 	protected function generateUpgradeLogQueries( $scriptName, $scriptHash ) {
 		$colnames = $this->getUpgradeLogColumnNames();
-		return array(
+		return array(array(
 			"INSERT INTO {$this->upgradeTableExpression}\n".
 			"({$colnames['time']}, {$colnames['script file name']}, {$colnames['script file hash']}) VALUES\n".
 			"(CURRENT_TIMESTAMP, {scriptfilename}, {scriptfilehash})",
 			array('scriptfilename'=>$scriptName, 'scriptfilehash'=>$scriptHash)
-		);
+		));
 	}
 	
 	public function logUpgrade( $scriptName, $scriptHash ) {
