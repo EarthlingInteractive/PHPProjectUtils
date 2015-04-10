@@ -72,12 +72,17 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		foreach( $this->fetchRows($sql,$params) as $row ) foreach( $row as $v ) return $v;
 		return null;
 	}
-		
-	protected function upgradeTableExists() {
-		return $this->fetchValue(
+	
+	protected function getUpgradeTableExistenceQuery() {
+		return array(
 			"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = {tableschema} AND table_name = {tablename}",
 			array('tableschema'=>$this->upgradeTableSchemaName ?: 'public', 'tablename'=>$this->upgradeTableName)
-		) > 0;
+		);
+	}
+	
+	protected function upgradeTableExists() {
+		list($sql,$params) = $this->getUpgradeTableExistenceQuery();
+		return $this->fetchValue($sql, $params) > 0;
 	}
 	
 	protected function readUpgradesTable() {
