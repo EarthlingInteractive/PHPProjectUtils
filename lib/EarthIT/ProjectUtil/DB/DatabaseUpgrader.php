@@ -22,6 +22,13 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->setUpgradeTable('schemaupgrade');
 	}
 	
+	/* This thing is designed to log upgrades
+	 * to a 'schemaupgrade' table in a postgres database.
+	 * These functions are defined the way they are with
+	 * the expectation that you can override them if you're
+	 * using a different database or your upgrade table is
+	 * structured somewhat differently. */
+
 	public function setUpgradeTable( $t ) {
 		$p = explode('.',$t,2);
 		if( count($p) == 2 ) {
@@ -46,6 +53,12 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			echo "-- doQuery with params: ", json_encode($params), "\n", $sql, "\n";
 		}
 		if( $this->shouldDoQueries ) $this->sqlRunner->doQuery($sql,$params);
+	}
+	
+	protected function doQueries( array $queries ) {
+		foreach( $queries as $q ) {
+			$this->doQuery($q[0], $q[1]);
+		}
 	}
 	
 	protected function fetchRows( $sql, array $params=array() ) {
@@ -76,6 +89,28 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			array();
 	}
 	
+	protected function getUpgradeLogColumnNames() {
+		return array(
+			'time' => 'time',
+			'script file name' => 'scriptfilename',
+			'script file hash' => 'scriptfilehash'
+		);
+	}
+	
+	protected function generateUpgradeLogQueries( $scriptName, $scriptHash ) {
+		$colnames = $this->getUpgradeLogColumnNames();
+		return array(
+			"INSERT INTO {$this->upgradeTableExpression}\n".
+			"({$colnames['time']}, {$colnames['script file name']}, {$colnames['script file hash']}) VALUES\n".
+			"(CURRENT_TIMESTAMP, {scriptfilename}, {scriptfilehash})",
+			array('scriptfilename'=>$scriptName, 'scriptfilehash'=>$scriptHash)
+		);
+	}
+	
+	public function logUpgrade( $scriptName, $scriptHash ) {
+		$this->doQueries( $this->generateUpgradeLogQueries($scriptName, $scriptHash) );
+	}
+	
 	protected function beginTransaction() {
 		$this->doRawQuery('BEGIN');
 	}
@@ -85,6 +120,9 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	protected function cancelTransaction() {
 		$this->doRawQuery('ROLLBACK');
 	}
+	
+	/* Here endeth the list of functions that are expected to be
+	 * overridden. */
 	
 	protected function runPhpScript($text, $name) {
 		require "{$this->upgradeScriptDir}/{$name}";
@@ -103,6 +141,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		// multiple commands in one prepared statement.
 		// TODO: Ensure that two upgrade scripts running in parallel don't accidentally
 		// run scripts twice.
+		// TODO: Actually do into the above TODO sometimes; it's known to be a real problem
+		// on sites with multiple deployments trying to upgrade the same database.
 		if( $useTransaction ) $this->beginTransaction();
 		try {
 			if( preg_match('/\.(php|sql)$/',$usName,$bif) ) {
@@ -114,12 +154,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			} else {
 				throw new Exception("Can't glean upgrade script type from name: '$usName'");
 			}
-			$this->doQuery(
-				"INSERT INTO {$this->upgradeTableExpression}\n".
-				"(time, scriptfilename, scriptfilehash) VALUES\n".
-				"(NOW(), {scriptfilename}, {scriptfilehash})",
-				array('scriptfilename'=>$usName, 'scriptfilehash'=>$hash)
-			);
+			$this->logUpgrade($usName, $hash);
 			if( $useTransaction ) $this->commitTransaction();
 		} catch( Exception $e ) {
 			if( $useTransaction ) $this->cancelTransaction();
