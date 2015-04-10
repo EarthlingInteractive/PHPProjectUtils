@@ -17,7 +17,7 @@ $usageText =
 	"  -upgrade-table [<schema>.]<table-name> ; indicate upgrade log table\n".
 	"  -bootstrap <file.php>      ; indicate environment initialization script\n".
 	"  -upgrade-script-dir <dir>  ; indicate directory containing upgrade scripts\n".
-	"  -upgrade-class <classname> ; override upgrader class\n".
+	"  -upgrader-class <classname> ; override upgrader class\n".
 	"  -v    ; be chatty\n".
 	"  -vv   ; be chattier\n".
 	"  -? -h ; show help text and exit\n";
