@@ -24,6 +24,12 @@ if( $dbcConfig === null ) {
 	exit(1);
 }
 
-echo "CREATE DATABASE \"{$dbcConfig['dbname']}\";\n";
+if( isset($dbcConfig['charset']) and $dbcConfig['charset'] === 'UTF-8' ) {
+	$dbOptStr = " WITH ENCODING 'UTF8' LC_COLLATE='en_US.UTF8' LC_CTYPE='en_US.UTF8' TEMPLATE=template0";
+} else {
+	$dbOptStr = '';
+}
+
+echo "CREATE DATABASE \"{$dbcConfig['dbname']}\"{$dbOptStr};\n";
 echo "CREATE USER \"{$dbcConfig['user']}\" WITH PASSWORD '{$dbcConfig['password']}';\n";
 echo "GRANT ALL PRIVILEGES ON DATABASE \"{$dbcConfig['dbname']}\" TO \"{$dbcConfig['user']}\";\n";

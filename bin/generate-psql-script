@@ -63,8 +63,10 @@ $seHost     = escapeshellarg($dbcConfig['host']);
 $sePort     = escapeshellarg(coalesce($dbcConfig['port'], 5432));
 $seDatabase = escapeshellarg($dbcConfig['dbname']);
 $seUser     = escapeshellarg($dbcConfig['user']);
+$seCharset  = isset($dbcConfig['charset']) ? escapeshellarg($dbcConfig['charset']) : null;
 
 echo "#!/bin/sh\n";
 echo "\n";
 echo "export PGPASSWORD={$sePassword}\n";
+if($seCharset) echo "export PGCLIENTENCODING={$seCharset}\n";
 echo "exec $psqlExe $seDatabase -U $seUser -h $seHost -p $sePort \"\$@\"\n";
