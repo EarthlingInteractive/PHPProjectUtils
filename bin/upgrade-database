@@ -18,9 +18,18 @@ $usageText =
 	"  -bootstrap <file.php>      ; indicate environment initialization script\n".
 	"  -upgrade-script-dir <dir>  ; indicate directory containing upgrade scripts\n".
 	"  -upgrader-class <classname> ; override upgrader class\n".
+	"  -dry-run ; dump upgrades to STDOUT instead of running them\n".
 	"  -v    ; be chatty\n".
 	"  -vv   ; be chattier\n".
-	"  -? -h ; show help text and exit\n";
+	"  -? -h ; show help text and exit\n".
+	"\n".
+	"Use -dry-run to dump out the SQL for all outstanding upgrades.\n".
+	"This will include inserts into the upgrade log table,\n".
+	"and should be suitable for running independently.\n".
+	"\n".
+	"Output from -v and -vv looks similar, but is intended only for debugging\n".
+	"and might not be suitable for running (for one thing, -dry-run makes a\n".
+	"point to insert missing semocolons between statements.  -vv does not).\n";
 
 for( $i=1; $i<count($argv); ++$i ) {
 	if( '-f' == $argv[$i] ) {
@@ -84,6 +93,7 @@ if( isset($reg->sqlRunner) ) {
 
 $upgrader = new $upgraderClass($sqlRunner, $scriptDir);
 $upgrader->actuallyDoUpgrades = !$dryRun;
+$upgrader->dumpUpgradesToStdout = $dryRun;
 $upgrader->allowOutOfOrderScripts = $forceUpgrade;
 $upgrader->verbosity = $verbosity;
 if( $upgradeTableExpression ) $upgrader->setUpgradeTable($upgradeTableExpression);

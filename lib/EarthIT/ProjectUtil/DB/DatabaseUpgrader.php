@@ -11,10 +11,32 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	protected $upgradeTableName;
 	protected $upgradeTableExpression;
 	protected $shouldDoQueries; // Set to false while dry-running upgrades
+	protected $shouldDumpQueries; // Set to true when dumping upgrade SQL
+	
+	/*
+	 * The upgrade process consists of 2 steps:
+	 * 1. Determine what upgrades to run
+	 * 2. Run them.
+	 *
+	 * $this->shouldDoQueries and $this->shouldDumpQueries should be
+	 * set to true and false, respectively, for step 1, but may be
+	 * modified according to $actuallyDoUpgrades and
+	 * $dumpUpgradesToStdout for step 2.
+	 *
+	 * Maybe it would be cleaner to have separate 'query' and 'exectute'
+	 * SQLRunners, but that would be a major change.
+	 */
 	
 	public $allowOutOfOrderScripts;
 	public $verbosity = 0;
 	public $actuallyDoUpgrades = true;
+	/**
+	 * If true, will dump the same SQL to standard output
+	 * that would be run to actually do the upgrades.
+	 * 
+	 * This is completely separate from verbosity settings.
+	 */
+	public $dumpUpgradesToStdout = false;
 	
 	public function __construct( $sqlRunner, $upgradeScriptDir ) {
 		$this->sqlRunner = $sqlRunner;
@@ -41,9 +63,28 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->upgradeTableExpression = $t;
 	}
 	
+	/** Make sure the last non-comment line ends with a semicolon. */
+	protected static function semicolonTerminate( $sql ) {
+		$lines = explode("\n", $sql);
+		$lastLineK = null;
+		foreach( $lines as $k=>$line ) {
+			$line = trim($line);
+			if( !preg_match('/^$|^--$|^--\s+/', $line) ) $lastLineK = $k;
+		}
+		if( $lastLineK !== null and !preg_match('/;$/', $lines[$lastLineK]) ) {
+			$lines[$lastLineK] .= ";";
+			return implode("\n", $lines);
+		} else {
+			return $sql;
+		}
+	}
+	
 	protected function doRawQuery( $sql ) {
 		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
 			echo "-- doRawQuery\n", $sql, "\n";
+		}
+		if( $this->shouldDumpQueries ) {
+			echo self::semicolonTerminate($sql), "\n";
 		}
 		if( $this->shouldDoQueries ) $this->sqlRunner->doRawQuery($sql);
 	}
@@ -51,6 +92,12 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	protected function doQuery( $sql, array $params=array() ) {
 		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
 			echo "-- doQuery with params: ", json_encode($params), "\n", $sql, "\n";
+		}
+		if( $this->shouldDumpQueries ) {
+			if( !method_exists($this->sqlRunner, 'quoteParams') ) {
+				throw new Exception("Can't dump parameterized queries because the database adapter doesn't implement #quoteParams.");
+			}
+			echo $this->sqlRunner->quoteParams(self::semicolonTerminate($sql), $params), "\n";
 		}
 		if( $this->shouldDoQueries ) $this->sqlRunner->doQuery($sql,$params);
 	}
@@ -64,6 +111,16 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	protected function fetchRows( $sql, array $params=array() ) {
 		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
 			echo "-- fetchRows with params: ", json_encode($params), "\n", $sql, "\n";
+		}
+		if( $this->shouldDumpQueries ) {
+			if( !method_exists($this->sqlRunner, 'quoteParams') ) {
+				throw new Exception("Can't dump parameterized queries because the database adapter doesn't implement #quoteParams.");
+			}
+			echo "-- Warning: Dumping query whose result is used.  This is maybe not useful.\n";
+			echo $this->sqlRunner->quoteParams($sql, $params), "\n";
+		}
+		if( !$this->shouldDoQueries ) {
+			throw new Exception("Can't fetch data from database because \$shouldDoQueries = false.");
 		}
 		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : [];
 	}
@@ -175,6 +232,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	
 	public function run() {
 		$this->shouldDoQueries = true;
+		$this->shouldDumpQueries = false;
 		
 		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun();
 		
@@ -236,6 +294,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 		
 		$this->shouldDoQueries = $this->actuallyDoUpgrades;
+		$this->shouldDumpQueries = $this->dumpUpgradesToStdout;
 		
 		foreach( $upgradeScriptsToRun as $us ) {
 			$usFile = "{$this->upgradeScriptDir}/$us";
@@ -260,6 +319,9 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			$hash = sha1($usText);
 			if( $this->verbosity >=self::VERBOSITY_LIST_SCRIPTS ) {
 				fwrite(STDOUT, "-- Running $usFile (SHA1 = $hash)...\n");
+			}
+			if( $this->dumpUpgradesToStdout ) {
+				echo "\n-- $us\n";
 			}
 			
 			$this->doUpgrade($usText, $us, $hash, $useTransaction);
