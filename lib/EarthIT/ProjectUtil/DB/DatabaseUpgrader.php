@@ -122,10 +122,10 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		if( !$this->shouldDoQueries ) {
 			throw new Exception("Can't fetch data from database because \$shouldDoQueries = false.");
 		}
-		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : [];
+		return $this->shouldDoQueries ? $this->sqlRunner->fetchRows($sql,$params) : array();
 	}
 	
-	protected function fetchValue( $sql, $params=[] ) {
+	protected function fetchValue( $sql, $params=array() ) {
 		foreach( $this->fetchRows($sql,$params) as $row ) foreach( $row as $v ) return $v;
 		return null;
 	}
