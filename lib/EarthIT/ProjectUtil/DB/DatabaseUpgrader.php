@@ -230,7 +230,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 	}
 	
-	public function run() {
+	/**
+	 * Determines what upgrade scripts to run and runs them in one go.
+	 * If any script is marked as modifying the upgrade table, this
+	 * function will return true after running that script to indicate
+	 * that there may be more upgrades to run.  Otherwise it returns
+	 * false, indicating that the upgrade process is complete.
+	 */
+	public function _run() {
 		$this->shouldDoQueries = true;
 		$this->shouldDumpQueries = false;
 		
@@ -301,14 +308,18 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			$usText = file_get_contents($usFile);
 			
 			$useTransaction = true;
+			$updatesUpgradeLog = false;
 			
 			$firstFewLines = explode("\n", $usText, 100);
 			foreach( $firstFewLines as $l ) {
-				if( preg_match('/^(?:--|#)\s*Dear database upgrader:\s*(.*)$/', $l, $bif) ) {
+				if( preg_match('<^(?:--|#|//)\s*Dear database upgrader:\s*(.*)$>', $l, $bif) ) {
 					$directive = trim($bif[1]);
 					switch( $directive ) {
 					case "Please do not wrap this script in a transaction.":
 						$useTransaction = false;
+						break;
+					case "This script updates the upgrade log.":
+						$updatesUpgradeLog = true;
 						break;
 					default:
 						throw new Exception("Unrecognized upgrader directive in '$usFile': \"$directive\"");
@@ -325,10 +336,23 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			}
 			
 			$this->doUpgrade($usText, $us, $hash, $useTransaction);
+			
+			if( $updatesUpgradeLog ) {
+				if( $this->verbosity >= self::VERBOSITY_LIST_SCRIPTS ) {
+					fwrite(STDOUT, "Upgrade '$us' made modifications to the upgrade log.  Need to reload.\n");
+				}
+				return true;
+			}
 		}
 		
 		if( $this->verbosity >= self::VERBOSITY_LIST_SCRIPTS ) {
 			fwrite(STDOUT, "Upgrade completed successfully!\n");
 		}
+		
+		return false;
+	}
+	
+	public function run() {
+		while( $this->_run() );
 	}
 }
