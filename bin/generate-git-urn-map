@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -euo pipefail
+bin_dir=$(dirname "$0")
+"${bin_dir}/list-git-objects" | "${bin_dir}/generate-git-urn-map.php"
