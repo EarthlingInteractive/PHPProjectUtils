@@ -1,0 +1,85 @@
+#!/usr/bin/php
+<?php
+
+class IndentChecker
+{
+	protected $filename;
+	protected $lineNumber;
+	protected $previousLine;
+	public $errorCount = 0;
+	
+	protected function opened( $filename ) {
+		$this->filename = $filename;
+		$this->lastLine = null;
+		$this->lineNumber = 1;
+	}
+	
+	protected static function leadingSpace( $l ) {
+		preg_match('/^([ \t]*)/',$l,$bif);
+		return $bif[1];
+	}
+	
+	protected function reportInvalidLine( $notes ) {
+		fwrite(STDERR, "Invalid line at {$this->filename}:{$this->lineNumber}\n");
+		foreach( $notes as $n ) {
+			fwrite(STDERR, "  $n\n");
+		}
+		++$this->errorCount;
+	}
+	
+	protected static function vizspace($text) {
+		return strtr($text,array(' '=>'.',"\t"=>'<tab>'));
+	}
+	
+	protected function line( $line ) {
+		if( $this->previousLine !== null ) {
+			$ps = self::leadingSpace($this->previousLine);
+			$cs = self::leadingSpace($line);
+			$sharedLen = min(strlen($ps),strlen($cs));
+			if( substr($this->previousLine,0,$sharedLen) !== substr($line,0,$sharedLen) ) {
+				$this->reportInvalidLine(array(
+					"Leading whitespace does not match that of previous line",
+					sprintf("% 4d: %s", $this->lineNumber-1, self::vizspace($ps)),
+					sprintf("% 4d: %s", $this->lineNumber  , self::vizspace($cs))));
+			}
+		}
+		$this->previousLine = $line;
+		++$this->lineNumber;
+	}
+	
+	public function checkFile( $filename, $reportAsFilename=null ) {
+		$fh = fopen($filename, 'rb');
+		if( $fh === false ) throw new Exception("Failed to open $filename");
+		$this->opened($reportAsFilename);
+		try {
+			$prevLine = null;
+			while( ($line = fgets($fh)) !== false ) {
+				$this->line($line);
+			}
+		} finally {
+			fclose($fh);
+		}
+	}
+}
+
+$inputFiles = array();
+for( $i=1; $i<count($argv); ++$i ) {
+	$arg = $argv[$i];
+	if( $arg === '-' or ($arg !== '' and $arg[0] !== '-') ) {
+		$inputFiles[] = $arg;
+	} else {
+		fwrite(STDERR, "Unrecognized argument: $arg\n");
+		fwrite(STDERR, "Usage: {$argv[0]} [<input file> ...]\n");
+		exit(1);
+	}
+}
+
+if( count($inputFiles) === 0 ) $inputFiles[] = '-';
+
+$checker = new IndentChecker();
+foreach( $inputFiles as $infile ) {
+	$infileN = $infile === '-' ? 'php://stdin' : $infile;
+	$checker->checkFile($infileN, $infile);
+}
+
+exit($checker->errorCount === 0 ? 0 : 1);
