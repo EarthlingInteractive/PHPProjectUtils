@@ -79,6 +79,20 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 	}
 	
+	const COMMENT_LINE_REGEX = '/^\s*(?:--|--\s+.*|)$/'; // Commented or empty
+	
+	protected function isEntirelyCommented( $sql ) {
+		$lines = explode("\n", $sql);
+		foreach( $lines as $line ) {
+			if( preg_match(self::COMMENT_LINE_REGEX,$line) ) continue;
+			
+			// Otherwise this line's not a comment!
+			return false;
+		}
+		// If we get here, there were no non-comment, non-blank lines, so yes.
+		return true;
+	}
+	
 	protected function doRawQuery( $sql ) {
 		if( $this->verbosity >= self::VERBOSITY_DUMP_SCRIPTS ) {
 			echo "-- doRawQuery\n", $sql, "\n";
@@ -86,7 +100,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		if( $this->shouldDumpQueries ) {
 			echo self::semicolonTerminate($sql), "\n";
 		}
-		if( $this->shouldDoQueries ) $this->sqlRunner->doRawQuery($sql);
+		if( $this->shouldDoQueries && !$this->isEntirelyCommented($sql) ) $this->sqlRunner->doRawQuery($sql);
 	}
 	
 	protected function doQuery( $sql, array $params=array() ) {
