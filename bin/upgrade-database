@@ -1,10 +1,42 @@
 #!/usr/bin/php
 <?php
 
+ini_set('display_errors','on');
+ini_set('error_reporting', E_ALL|E_STRICT);
+
+function eit_dump_error_and_exit2( $text, $backtrace, Exception $cause=null, $extraInfo='' ) {
+	fwrite(STDERR, "{$text}\n");
+	foreach( $backtrace as $item ) {
+		if( isset($item['file']) || isset($item['line']) ) {
+			$f = isset($item['file']) ? $item['file'] : '';
+			$l = isset($item['line']) ? $item['line'] : '';
+			$u = isset($item['function']) ? $item['function'] : '';
+			fwrite(STDERR, "  " . $f . ($l ? ":{$l}" : '') . ($u ? " in {$u}" : '') . "\n");
+		}
+	}
+	if( $cause != null ) {
+		fwrite(STDERR, "Caused by...\n");
+		eit_dump_exception_and_exit($cause);
+	}
+	if( $extraInfo ) {
+		fwrite(STDERR, "\n".$extraInfo."\n");
+	}
+	exit(1);
+}
+
+function eit_dump_error_and_exit( $errno, $errstr, $errfile=null, $errline=null, $errcontext=null ) {
+	if( (error_reporting() & $errno) == 0 ) return; // @fopen, etc.
+	eit_dump_error_and_exit2( "Error code=$errno: $errstr", debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS ) );
+}
+
+set_error_handler('eit_dump_error_and_exit', E_ALL|E_STRICT);
+
+
+
 $forceUpgrade = false;
 $verbosity = 0;
 $upgradeTableExpression = null;
-$scriptDir = 'build/db/upgrades';
+$scriptDirs = array();
 $upgraderClass = 'EarthIT_ProjectUtil_DB_DatabaseUpgrader';
 $bootstrapFile = null;
 $showHelp = false;
@@ -39,7 +71,7 @@ for( $i=1; $i<count($argv); ++$i ) {
 	} else if( '-bootstrap' == $argv[$i] ) {
 		$bootstrapFile = $argv[++$i];
 	} else if( '-upgrade-script-dir' == $argv[$i] ) {
-		$scriptDir = $argv[++$i];
+		$scriptDirs[] = $argv[++$i];
 	} else if( '-upgrader-class' == $argv[$i] ) {
 		$upgraderClass = $argv[++$i];
 	} else if( '-dry-run' == $argv[$i] ) {
@@ -91,7 +123,11 @@ if( isset($reg->sqlRunner) ) {
 	exit(1);
 }
 
-$upgrader = new $upgraderClass($sqlRunner, $scriptDir);
+if( count($scriptDirs) == 0 ) {
+	$scriptDirs[] = 'build/db/upgrades';
+}
+
+$upgrader = new $upgraderClass($sqlRunner, $scriptDirs);
 $upgrader->actuallyDoUpgrades = !$dryRun;
 $upgrader->dumpUpgradesToStdout = $dryRun;
 $upgrader->allowOutOfOrderScripts = $forceUpgrade;
