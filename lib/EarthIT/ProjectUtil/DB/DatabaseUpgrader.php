@@ -28,10 +28,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	 */
 	
 	/*
-	 * When upgrade scripts are represented as an array, it looks like this: {
-	 *   "scriptfilename": basename of script; used for determining order
-	 *   "scriptfilehash": hex-encoded SHA-1 of script
-	 *   "scriptfilepath": path to script file
+	 * When an upgrade script is represented as an array, it will have some subset of the following information:
+	 *
+	 * {
+	 *   "scriptFilename": basename of script; used for determining order (e.g. '0101-create-tables.sql')
+	 *   "scriptFileHash": hex-encoded SHA-1 of script (e.g. '23d9979512bc9211d744915f22d3c09233016b0e')
+	 *   "scriptFilePath": full path to script file (e.g. 'build/db/upgrades/0101-create-tables.sql')
+	 *   "scriptFileContent": content of script file, as a string
+	 * }
 	 */
 	
 	public $allowOutOfOrderScripts;
@@ -165,9 +169,13 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	}
 	
 	protected function readUpgradesTable() {
+		$colnames = $this->getUpgradeLogColumnNames();
 		$upgradesAlreadyRun = array();
-		foreach($this->fetchRows("SELECT scriptfilename AS scriptfilename FROM {$this->upgradeTableExpression}") as $sar) {
-			$upgradesAlreadyRun[$sar['scriptfilename']] = $sar;
+		foreach($this->fetchRows(
+			"SELECT \"{$colnames['scriptFilename']}\" AS \"scriptFilename\"\n".
+			"FROM {$this->upgradeTableExpression}") as $sar
+		) {
+			$upgradesAlreadyRun[$sar['scriptFilename']] = $sar;
 		}
 		return $upgradesAlreadyRun;
 	}
@@ -181,8 +189,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	protected function getUpgradeLogColumnNames() {
 		return array(
 			'time' => 'time',
-			'script file name' => 'scriptfilename',
-			'script file hash' => 'scriptfilehash'
+			'scriptFilename' => 'scriptfilename',
+			'scriptFileHash' => 'scriptfilehash'
 		);
 	}
 	
@@ -190,9 +198,9 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$colnames = $this->getUpgradeLogColumnNames();
 		return array(array(
 			"INSERT INTO {$this->upgradeTableExpression}\n".
-			"({$colnames['time']}, {$colnames['script file name']}, {$colnames['script file hash']}) VALUES\n".
-			"(CURRENT_TIMESTAMP, {scriptfilename}, {scriptfilehash})",
-			array('scriptfilename'=>$scriptName, 'scriptfilehash'=>$scriptHash)
+			"({$colnames['time']}, {$colnames['scriptFilename']}, {$colnames['scriptFileHash']}) VALUES\n".
+			"(CURRENT_TIMESTAMP, {scriptFilename}, {scriptFileHash})",
+			array('scriptFilename'=>$scriptName, 'scriptFileHash'=>$scriptHash)
 		));
 	}
 	
@@ -232,10 +240,10 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		// TODO: Actually do into the above TODO sometimes; it's known to be a real problem
 		// on sites with multiple deployments trying to upgrade the same database.
 
-		$usText = $upgradeScript['scriptfilecontent'];
-		$usName = $upgradeScript['scriptfilename'];
-		$usPath = $upgradeScript['scriptfilepath'];
-		$usHash = $upgradeScript['scriptfilehash'];
+		$usText = $upgradeScript['scriptFileContent'];
+		$usName = $upgradeScript['scriptFilename'];
+		$usPath = $upgradeScript['scriptFilePath'];
+		$usHash = $upgradeScript['scriptFileHash'];
 		
 		if( $useTransaction ) $this->beginTransaction();
 		try {
@@ -271,14 +279,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 				$this->_findUpgradeScripts($fullpath, $upgradeScripts, $junkFiles);
 			} else if( preg_match('/\.(?:sql|php)$/',$fn) ) {
 				if( isset($upgradeScripts[$fn]) ) {
-					$oldFullPath = $upgradeScripts[$fn]['scriptfilepath'];
+					$oldFullPath = $upgradeScripts[$fn]['scriptFilePath'];
 					$errors['duplicateScripts'][$fn][$oldFullPath] = $upgradeScripts[$fn];
 					$errors['duplicateScripts'][$fn][$fullpath] = $upgradeScript;
 				}
 				
 				$upgradeScripts[$fn] = array(
-					'scriptfilename' => $fn,
-					'scriptfilepath' => $fullpath,
+					'scriptFilename' => $fn,
+					'scriptFilePath' => $fullpath,
 				);
 			} else {
 				$errors['junkFiles'][$fullpath] = $fullpath;
@@ -334,8 +342,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->shouldDoQueries = true;
 		$this->shouldDumpQueries = false;
 		
-		$upgradeScripts = $this->findUpgradeScripts(); // scriptfilename => array(...)
-		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun(); // scriptfilename => array(...)
+		$upgradeScripts = $this->findUpgradeScripts(); // scriptFilename => array(...)
+		$upgradesAlreadyRun = $this->getUpgradesAlreadyRun(); // scriptFilename => array(...)
 		$alreadyRunOutOfOrderScripts = array();
 		$upgradeScriptsToRun = array();
 		
@@ -370,7 +378,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$this->shouldDumpQueries = $this->dumpUpgradesToStdout;
 		
 		foreach( $upgradeScriptsToRun as $us=>$upgradeScript ) {
-			$usFile = $upgradeScript['scriptfilepath'];
+			$usFile = $upgradeScript['scriptFilePath'];
 			$usText = file_get_contents($usFile);
 			
 			$useTransaction = true;
@@ -401,8 +409,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 				echo "\n-- $us\n";
 			}
 			
-			$upgradeScript['scriptfilehash'] = $hash;
-			$upgradeScript['scriptfilecontent'] = $usText;
+			$upgradeScript['scriptFileHash'] = $hash;
+			$upgradeScript['scriptFileContent'] = $usText;
 			
 			$this->doUpgrade($upgradeScript, $useTransaction);
 			
