@@ -49,6 +49,11 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	 */
 	public $dumpUpgradesToStdout = false;
 	
+	protected static function first( array $arr ) {
+		foreach( $arr as $v ) return $v;
+		return null;
+	}
+	
 	public function __construct( $sqlRunner, $upgradeScriptDirs ) {
 		if( !is_array($upgradeScriptDirs) ) $upgradeScriptDirs = array($upgradeScriptDirs);
 		$this->sqlRunner = $sqlRunner;
@@ -356,7 +361,8 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		}
 		
 		if( !$this->allowOutOfOrderScripts and count($alreadyRunOutOfOrderScripts) > 0 ) {
-			fwrite(STDERR, "Error: Some scripts after the first unrun one ({$upgradeScriptsToRun[0]}) have already been run:\n");
+			$firstToRun = self::first($upgradeScriptsToRun);
+			fwrite(STDERR, "Error: Some scripts after the first unrun one ({$firstToRun['scriptFilePath']}) have already been run:\n");
 			foreach( $alreadyRunOutOfOrderScripts as $s=>$_ ) {
 				fwrite(STDERR, "  $s\n");
 			}
