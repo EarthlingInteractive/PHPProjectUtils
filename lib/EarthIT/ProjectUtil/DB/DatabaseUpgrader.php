@@ -284,8 +284,9 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 				$this->_findUpgradeScripts($fullpath, $upgradeScripts, $junkFiles);
 			} else if( preg_match('/\.(?:sql|php)$/',$fn) ) {
 				if( isset($upgradeScripts[$fn]) ) {
-					$oldFullPath = $upgradeScripts[$fn]['scriptFilePath'];
-					$errors['duplicateScripts'][$fn][$oldFullPath] = $upgradeScripts[$fn];
+					$upgradeScript = $upgradeScripts[$fn];
+					$oldFullPath = $upgradeScript['scriptFilePath'];
+					$errors['duplicateScripts'][$fn][$oldFullPath] = $upgradeScript;
 					$errors['duplicateScripts'][$fn][$fullpath] = $upgradeScript;
 				}
 				
@@ -315,14 +316,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		$anyErrors = false;
 		if( !empty($errors['junkFiles']) ) {
 			fwrite(STDERR, "Error: There is extra junk in your upgrade scripts directory:\n");
-			foreach( $junkFiles as $f ) {
+			foreach( $errors['junkFiles'] as $f ) {
 				fwrite(STDERR, "  $f\n");
 			}
 			$anyErrors = true;
 		}
-		if( !empty($errors['duplicateUpgradeScripts']) ) {
+		if( !empty($errors['duplicateScripts']) ) {
 			fwrite(STDERR, "Error: Some scripts are duplicated (same name in different directories):\n");
-			foreach( $duplicateUpgradeScripts as $us=>$versions ) {
+			foreach( $errors['duplicateScripts'] as $us=>$versions ) {
 				fwrite(STDERR, "  $us: ".implode(', ',array_keys($versions))."\n");
 			}
 			$anyErrors = true;
