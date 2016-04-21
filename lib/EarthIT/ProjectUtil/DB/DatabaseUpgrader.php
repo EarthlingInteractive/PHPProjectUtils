@@ -173,6 +173,17 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		return $this->fetchValue($sql, $params) > 0;
 	}
 	
+	protected function hasUpgradeBeenRun($scriptFilename) {
+		if( !$this->upgradeTableExists() ) return false;
+		
+		$colnames = $this->getUpgradeLogColumnNames();
+		return (bool)$this->fetchValue(
+			"SELECT COUNT(*)\n".
+			"FROM {$this->upgradeTableExpression}\n".
+			"WHERE \"{$colnames['scriptFilename']}\" = {scriptFilename}",
+			array('scriptFilename'=>$scriptFilename));
+	}
+	
 	protected function readUpgradesTable() {
 		$colnames = $this->getUpgradeLogColumnNames();
 		$upgradesAlreadyRun = array();
@@ -252,6 +263,15 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		
 		if( $useTransaction ) $this->beginTransaction();
 		try {
+			if( $this->hasUpgradeBeenRun($usName) ) {
+				// Maybe another script is attempting to run in parallel?
+				// Anyway, this means something's wrong.
+				// So abort.
+				// And if not explicitly aborted, hopefully having checked that table
+				// causes the transaction to fail.
+				throw new Exception("Script {$usName} has already been run.  Is there another upgrading running in parallel?");
+			}
+			
 			if( preg_match('/\.(php|sql)$/',$usName,$bif) ) {
 				switch( $ext = $bif[1] ) {
 				case 'sql': $this->doRawQuery($usText); break;
