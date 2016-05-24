@@ -61,7 +61,7 @@ $usageText =
 	"\n".
 	"Output from -v and -vv looks similar, but is intended only for debugging\n".
 	"and might not be suitable for running (for one thing, -dry-run makes a\n".
-	"point to insert missing semocolons between statements.  -vv does not).\n";
+	"point to insert missing semicolons between statements.  -vv does not).\n";
 
 for( $i=1; $i<count($argv); ++$i ) {
 	if( '-f' == $argv[$i] ) {
