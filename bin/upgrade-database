@@ -37,6 +37,7 @@ $forceUpgrade = false;
 $verbosity = 0;
 $upgradeTableExpression = null;
 $scriptDirs = array();
+$upgradeScriptBlobstoreDir = null;
 $upgraderClass = 'EarthIT_ProjectUtil_DB_DatabaseUpgrader';
 $bootstrapFile = null;
 $showHelp = false;
@@ -49,6 +50,8 @@ $usageText =
 	"  -upgrade-table [<schema>.]<table-name> ; indicate upgrade log table\n".
 	"  -bootstrap <file.php>      ; indicate environment initialization script\n".
 	"  -upgrade-script-dir <dir>  ; indicate directory containing upgrade scripts\n".
+	"  -upgrade-script-blobstore-dir <dir> ; indicate directory into which to copy\n".
+	"                             ; upgrade scripts as they're run\n".
 	"  -upgrader-class <classname> ; override upgrader class\n".
 	"  -dry-run ; dump upgrades to STDOUT instead of running them\n".
 	"  -v    ; be chatty\n".
@@ -72,6 +75,8 @@ for( $i=1; $i<count($argv); ++$i ) {
 		$bootstrapFile = $argv[++$i];
 	} else if( '-upgrade-script-dir' == $argv[$i] ) {
 		$scriptDirs[] = $argv[++$i];
+	} else if( '-upgrade-script-blobstore-dir' == $argv[$i] ) {
+		$upgradeScriptBlobstoreDir = $argv[++$i];
 	} else if( '-upgrader-class' == $argv[$i] ) {
 		$upgraderClass = $argv[++$i];
 	} else if( '-dry-run' == $argv[$i] ) {
@@ -130,6 +135,7 @@ if( count($scriptDirs) == 0 ) {
 $upgrader = new $upgraderClass($sqlRunner, $scriptDirs);
 $upgrader->actuallyDoUpgrades = !$dryRun;
 $upgrader->dumpUpgradesToStdout = $dryRun;
+$upgrader->upgradeScriptBlobstoreDir = $upgradeScriptBlobstoreDir;
 $upgrader->allowOutOfOrderScripts = $forceUpgrade;
 $upgrader->verbosity = $verbosity;
 if( $upgradeTableExpression ) $upgrader->setUpgradeTable($upgradeTableExpression);

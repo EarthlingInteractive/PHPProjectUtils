@@ -3,6 +3,9 @@
 	"description": "Build utilities for PHP projects, in PHP.",
 	"license": "MIT",
 	"require": { },
+	"suggest": {
+		"togos/base32": "Allows storing upgrade scripts into a ccouch-style blobstore."
+	},
 	"bin": [
 		"bin/generate-psql-script",
 		"bin/upgrade-database",

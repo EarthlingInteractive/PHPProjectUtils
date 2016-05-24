@@ -48,6 +48,14 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 	 * This is completely separate from verbosity settings.
 	 */
 	public $dumpUpgradesToStdout = false;
+	/**
+	 * Path of a directory to dump upgrade script content into;
+	 * e.g. "datastore/data/upgrade-scripts"
+	 * Upgrades will be written to "{$upgradeScriptBlobstoreDir}/{$base32First2}/{$base32}"
+	 * Where $base32 = base32(sha1(script text)), and $base32First2 is the first 2 characters
+	 * of $base32 (base 32 is used for compatibility with PHPN2R and ContentCouch datastores).
+	 */
+	public $upgradeScriptBlobstoreDir = null;
 	
 	protected static function first( array $arr ) {
 		foreach( $arr as $v ) return $v;
@@ -230,8 +238,34 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		));
 	}
 	
-	public function logUpgrade( $scriptName, $scriptHash ) {
+	protected $lastNonFatalError = null;
+	protected function logNonFatalError($text) {
+		if( $this->lastNonFatalError == $text ) return; // Already printed; let's not be too annoying.
+		$this->lastNonFatalError = $text;
+		fwrite(STDERR, "Warning: ".str_replace("\n","\n         ",$text)."\n");
+	}
+	
+	public function logUpgrade( $scriptName, $scriptHash, $usText ) {
 		$this->doQueries( $this->generateUpgradeLogQueries($scriptName, $scriptHash) );
+		
+		if( $this->upgradeScriptBlobstoreDir !== null ) {
+			if( !class_exists('TOGoS_Base32') ) {
+				$this->logNonFatalError("Can't copy upgrade script to blobstore because TOGoS_Base32 isn't defined.\nTry composer installing togos/base32.");
+				return;
+			}
+			$b32 = TOGoS_Base32::encode(hex2bin($scriptHash));
+			$dir = $this->upgradeScriptBlobstoreDir.'/'.substr($b32,0,2);
+			if( !is_dir($dir) ) {
+				if( !@mkdir($dir, 0777, true) ) {
+					$this->logNonFatalError("Failed to mkdir(".var_export($dir,true)."); can't copy upgrade script to there");
+					return;
+				}
+			}
+			$file = "{$dir}/{$b32}";
+			if( file_exists($file) ) return;
+			
+			file_put_contents($file, $usText);
+		}
 	}
 	
 	protected function beginTransaction() {
@@ -291,7 +325,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			} else {
 				throw new Exception("Can't glean upgrade script type from name: '$usName'");
 			}
-			$this->logUpgrade($usName, $usHash);
+			$this->logUpgrade($usName, $usHash, $usText);
 			if( $useTransaction ) $this->commitTransaction();
 		} catch( Exception $e ) {
 			if( $useTransaction ) $this->cancelTransaction();
