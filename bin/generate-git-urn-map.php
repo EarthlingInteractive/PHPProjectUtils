@@ -55,7 +55,7 @@ function sys($cmd) {
 $startTime = microtime(true);
 
 $verbose = false;
-$updateFile = '-';
+$updateFile = null;
 for( $i=1; $i<count($argv); ++$i ) {
 	if( $argv[$i] == '-i' ) {
 		$updateFile = $argv[++$i];
