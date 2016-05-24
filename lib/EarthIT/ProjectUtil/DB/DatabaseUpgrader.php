@@ -54,6 +54,16 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		return null;
 	}
 	
+	protected static function firstKey( array $arr ) {
+		foreach( $arr as $k=>$v ) return $k;
+		return null;
+	}
+	protected static function lastKey( array $arr ) {
+		$k = null;
+		foreach( $arr as $k=>$v );
+		return $k;
+	}
+	
 	public function __construct( $sqlRunner, $upgradeScriptDirs ) {
 		if( !is_array($upgradeScriptDirs) ) $upgradeScriptDirs = array($upgradeScriptDirs);
 		$this->sqlRunner = $sqlRunner;
