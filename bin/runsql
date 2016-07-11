@@ -37,6 +37,9 @@ for( $i=1; $i<count($argv); ++$i ) {
 	case '-fetch': $method = 'fetchRows'; break;
 	case '-raw': $method = 'doRawQuery'; break;
 	case '-do': $method = 'doQuery'; break;
+	case '-bootstrap':
+		$bootstrapFile = $argv[++$i];
+		break;
 	case '-v':
 		$shouldPrintQueries = true;
 		break;
