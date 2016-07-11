@@ -1,0 +1,98 @@
+#!/usr/bin/env php
+<?php
+
+$bootstrapFile = null;
+$method = 'fetchRows'; // 'doQuery', 'doRawQuery'
+$queries = [];
+$shouldPrintQueries = false;
+$shouldKeepParsingArgs = true;
+$shouldReadFromStdinWhenNoQueriesGiven = true;
+
+define( 'USAGE_TEXT',
+	"Usage: runsql [<options>] [-fetch|-do|-raw] [-file <file.sql>|<query>]* [--] [<query>]*\n".
+	"If run with no queries (unless '--' was given), will read one from standard input.\n".
+	"Other options:\n".
+	"  -bootstrap <file.php> ; indicate bootstrap file (default: {$bootstrapFile})\n".
+   "  -v                    ; include more output\n".
+   "  -?                    ; show this help text and exit\n"
+);
+
+function read_query_file($f) {
+	if( $f == '-' ) $f = 'php://stdin';
+	$query = file_get_contents($f);
+	if( $query === false ) {
+		fwrite(STDERR, "Error: Failed to read query from '$file'\n");
+		exit(1);
+	}
+	return $query;
+}
+
+for( $i=1; $i<count($argv); ++$i ) {
+	if( !$shouldKeepParsingArgs ) {
+		$queries[] = $argv[$i];
+		continue;
+	}
+	
+	switch( $argv[$i] ) {
+	case '-fetch': $method = 'fetchRows'; break;
+	case '-raw': $method = 'doRawQuery'; break;
+	case '-do': $method = 'doQuery'; break;
+	case '-v':
+		$shouldPrintQueries = true;
+		break;
+	case '--':
+		$shouldReadFromStdinWhenNoQueriesGiven = false;
+		$shouldKeepParsingArgs = false;
+		break;
+	case '-f': case '-file':
+		$queries[] = read_query_file($argv[++$i]);
+		break;
+	case '-h': case '-?': case '-help': case '--help':
+		fwrite(STDOUT, USAGE_TEXT);
+		exit(0);
+	default:
+		if( $argv[$i][0] == '-' ) {
+			fwrite(STDERR, "Error: Unrecognized argument: {$argv[$i]}\n");
+			fwrite(STDERR, USAGE_TEXT);
+			exit(1);
+		} else {
+			$queries[] = $argv[$i];
+		}
+	}
+}
+
+if( count($queries) == 0 and $shouldReadFromStdinWhenNoQueriesGiven ) {
+	$queries[] = read_query_file('-');
+}
+
+function findBootstrapFile() {
+	$bootstrapSearchDirs = array('.', __DIR__.'/..', __DIR__);
+	foreach( $bootstrapSearchDirs as $d ) {
+		if( file_exists($f = "{$d}/init-environment.php") ) {
+			return $f;
+		}
+	}
+	return null;
+}
+
+$bootstrapFile = $bootstrapFile ?: findBootstrapFile();
+if( $bootstrapFile === null ) {
+	fwrite(STDERR, "Error: no bootstrap file specified or found.\n");
+	exit(1);
+}
+
+$reg = require_once $bootstrapFile;
+
+$rezCount = 0;
+foreach( $queries as $query ) {
+	$rez = $reg->sqlRunner->$method($query);
+	if( $rezCount > 0 ) {
+		echo "\n";
+	}
+	if( $shouldPrintQueries ) {
+		echo "# ", str_replace("\n", "\n# ", trim($query)), "\n\n";
+	}
+	EarthIT_JSON::prettyPrint($rez, Nife_Util::getEchoFunction());
+	echo "\n";
+	++$rezCount;
+}
