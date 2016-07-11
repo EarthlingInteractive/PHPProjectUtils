@@ -307,7 +307,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		
 		if( $useTransaction ) $this->beginTransaction();
 		try {
-			if( $this->hasUpgradeBeenRun($usName) ) {
+			if( $this->shouldDoQueries && $this->hasUpgradeBeenRun($usName) ) {
 				// Maybe another script is attempting to run in parallel?
 				// Anyway, this means something's wrong.
 				// So abort.
