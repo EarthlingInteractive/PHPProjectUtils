@@ -319,7 +319,13 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			if( preg_match('/\.(php|sql)$/',$usName,$bif) ) {
 				switch( $ext = $bif[1] ) {
 				case 'sql': $this->doRawQuery($usText); break;
-				case 'php': $this->runPhpScript($usText, $usPath); break;
+				case 'php':
+					if( $this->shouldDoQueries ) {
+						$this->runPhpScript($usText, $usPath);
+					} else {
+						echo "-- At this point in the upgrade process, we would run $usPath\n";
+					}
+					break;
 				default: throw new Exception("'$ext'?", "{$this->upgradeScriptDir}/{$usName}");
 				}
 			} else {
