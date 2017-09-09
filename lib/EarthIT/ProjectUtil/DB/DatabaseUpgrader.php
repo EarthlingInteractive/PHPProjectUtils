@@ -71,12 +71,55 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		foreach( $arr as $k=>$v );
 		return $k;
 	}
-	
-	public function __construct( $sqlRunner, $upgradeScriptDirs ) {
+
+	const NC_LOWER_SQUISHED = 'lower-squished';
+	const NC_LOWER_SNAKE = 'lower-snake';
+	const NC_UPPER_CAMEL = 'upper-camel';
+	const NC_LOWER_CAMEL = 'lower-camel';
+	protected $dbObjectNamingConvention = 'lower-squished';
+
+	public function __construct( $sqlRunner, $upgradeScriptDirs, $options=array() ) {
 		if( !is_array($upgradeScriptDirs) ) $upgradeScriptDirs = array($upgradeScriptDirs);
 		$this->sqlRunner = $sqlRunner;
 		$this->upgradeScriptDirs = $upgradeScriptDirs;
-		$this->setUpgradeTable('schemaupgrade');
+		if( isset($options['dbObjectNamingConvention'])) {
+			$this->dbObjectNamingConvention = $options['dbObjectNamingConvention'];
+		}
+		$this->setUpgradeTable($this->toDbObjectName('schema upgrade'));
+	}
+
+	protected static function toUpperCamelCase($name) {
+		// e.g. "XML HTTP request" => "XMLHTTPRequest"
+		$words = explode(' ',$name);
+		foreach( $words as $i => &$word ) {
+			$word = ucfirst($word);
+		}
+		return implode('',$words);
+	}
+	
+	protected static function toLowerCamelCase($name) {
+		// e.g. "XML HTTP request" => "xmlHttpRequest"
+		$words = explode(' ',$name);
+		foreach( $words as $i => &$word ) {
+			$word = strtolower($word);
+			if( $i != 0 ) $word = ucfirst($word);
+		}
+		return implode('',$words);
+	}
+
+	protected function toDbObjectName($name) {
+		switch( $this->dbObjectNamingConvention ) {
+		case self::NC_LOWER_SQUISHED:
+			return strtolower(str_replace(' ','',$name));
+		case self::NC_LOWER_SNAKE:
+			return strtolower(str_replace(' ','_',$name));
+		case self::NC_LOWER_CAMEL:
+			return self::toLowerCamelCase($name);
+		case self::NC_UPPER_CAMEL:
+			return self::toUpperCamelCase($name);
+		default:
+			throw new Exception("Unsupported database object naming convention '{$this->dbObjectNamingConvention}'");
+		}
 	}
 	
 	/* This thing is designed to log upgrades
@@ -219,13 +262,17 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			$this->readUpgradesTable() :
 			array();
 	}
-	
+
+	/**
+	 * Returns a map of camelCase => however the column is spelled in the database
+	 * of our upgrade table columns
+	 */
 	protected function getUpgradeLogColumnNames() {
-		return array(
-			'time' => 'time',
-			'scriptFilename' => 'scriptfilename',
-			'scriptFileHash' => 'scriptfilehash'
-		);
+		$colNames = array();
+		foreach( array('time','script filename','script file hash') as $attrib ) {
+			$colNames[self::toLowerCamelCase($attrib)] = $this->toDbObjectName($attrib);
+		}
+		return $colNames;
 	}
 	
 	protected function generateUpgradeLogQueries( $scriptName, $scriptHash ) {

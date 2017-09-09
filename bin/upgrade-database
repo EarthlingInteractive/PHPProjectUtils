@@ -42,6 +42,7 @@ $upgraderClass = 'EarthIT_ProjectUtil_DB_DatabaseUpgrader';
 $bootstrapFile = null;
 $showHelp = false;
 $dryRun = false;
+$moreOptions = array();
 
 $usageText =
 	"Usage: {$argv[0]} [options]\n".
@@ -73,6 +74,8 @@ for( $i=1; $i<count($argv); ++$i ) {
 		$upgradeTableExpression = $argv[++$i];
 	} else if( '-bootstrap' == $argv[$i] ) {
 		$bootstrapFile = $argv[++$i];
+	} else if( '-naming-convention' == $argv[$i] ) {
+		$moreOptions['dbObjectNamingConvention'] = $argv[++$i];
 	} else if( '-upgrade-script-dir' == $argv[$i] ) {
 		$scriptDirs[] = $argv[++$i];
 	} else if( '-upgrade-script-blobstore-dir' == $argv[$i] ) {
@@ -132,7 +135,7 @@ if( count($scriptDirs) == 0 ) {
 	$scriptDirs[] = 'build/db/upgrades';
 }
 
-$upgrader = new $upgraderClass($sqlRunner, $scriptDirs);
+$upgrader = new $upgraderClass($sqlRunner, $scriptDirs, $moreOptions);
 $upgrader->actuallyDoUpgrades = !$dryRun;
 $upgrader->dumpUpgradesToStdout = $dryRun;
 $upgrader->upgradeScriptBlobstoreDir = $upgradeScriptBlobstoreDir;
