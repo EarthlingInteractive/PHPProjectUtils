@@ -123,7 +123,7 @@ while( ($blobId = fgets(STDIN)) !== false ) {
 		++$nonBlobCount;
 		continue;
 	}
-	
+
 	fwrite($outstream, "{$gitObjectUrn}\t{$urn}\n");
 	if( ++$outputCount % 64 == 0 ) fflush($outstream); // Try to flush between lines
 }

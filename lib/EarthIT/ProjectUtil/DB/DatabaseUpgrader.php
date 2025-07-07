@@ -392,7 +392,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 		if( $dh === false ) {
 			throw new Exception("Failed to open upgrade script directory '$dir'");
 		}
-		
+
 		$junkFiles = array();
 		while( ($fn = readdir($dh)) !== false ) {
 			if( preg_match('/^\./',$fn) ) continue;
@@ -406,7 +406,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 					$errors['duplicateScripts'][$fn][$oldFullPath] = $upgradeScript;
 					$errors['duplicateScripts'][$fn][$fullpath] = $upgradeScript;
 				}
-				
+
 				$upgradeScripts[$fn] = array(
 					'scriptFilename' => $fn,
 					'scriptFilePath' => $fullpath,
@@ -417,7 +417,7 @@ class EarthIT_ProjectUtil_DB_DatabaseUpgrader
 			}
 		}
 		closedir($dh);
-		
+
 		return count($errors) == 0; // Not quite the right logic but will work for now
 	}
 	

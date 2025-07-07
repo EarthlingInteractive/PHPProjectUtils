@@ -4,7 +4,7 @@
 ini_set('display_errors','on');
 ini_set('error_reporting', E_ALL|E_STRICT);
 
-function eit_dump_error_and_exit2( $text, $backtrace, Exception $cause=null, $extraInfo='' ) {
+function eit_dump_error_and_exit2( $text, $backtrace, Exception|null $cause=null, $extraInfo='' ) {
 	fwrite(STDERR, "{$text}\n");
 	foreach( $backtrace as $item ) {
 		if( isset($item['file']) || isset($item['line']) ) {
