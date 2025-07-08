@@ -29,7 +29,7 @@ function eit_dump_error_and_exit( $errno, $errstr, $errfile=null, $errline=null,
 	eit_dump_error_and_exit2( "Error code=$errno: $errstr", debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS ) );
 }
 
-set_error_handler('eit_dump_error_and_exit', E_ALL|E_STRICT);
+set_error_handler('eit_dump_error_and_exit', E_ALL|E_NOTICE);
 
 
 
