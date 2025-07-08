@@ -2,7 +2,7 @@
 <?php
 
 ini_set('display_errors','on');
-ini_set('error_reporting', E_ALL|E_STRICT);
+ini_set('error_reporting', E_ALL|E_NOTICE);
 
 function eit_dump_error_and_exit2( $text, $backtrace, Exception|null $cause=null, $extraInfo='' ) {
 	fwrite(STDERR, "{$text}\n");
